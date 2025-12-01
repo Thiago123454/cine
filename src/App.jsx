@@ -7,7 +7,7 @@ import {
   onSnapshot, 
   doc, 
   updateDoc, 
-  deleteDoc, 
+  deleteDoc,
   serverTimestamp 
 } from 'firebase/firestore';
 import { 
@@ -32,6 +32,7 @@ import {
   ClipboardList,
   ArrowRight,
   UserCircle2,
+  Lock,
   KeyRound
 } from 'lucide-react';
 
@@ -114,11 +115,6 @@ export default function App() {
 
   // --- Auth & Data Loading ---
   useEffect(() => {
-    // 1. Pedir permiso para notificaciones al cargar la app
-    if ("Notification" in window && Notification.permission !== "granted") {
-      Notification.requestPermission();
-    }
-
     const initAuth = async () => {
       if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
         await signInWithCustomToken(auth, __initial_auth_token);
@@ -144,33 +140,6 @@ export default function App() {
         id: doc.id,
         ...doc.data()
       }));
-
-      // --- LÓGICA DE NOTIFICACIONES ---
-      // Solo ejecutamos esto si no es la primera carga (para que no suene todo al abrir la app)
-      if (!loading) {
-        snapshot.docChanges().forEach((change) => {
-          if (change.type === "modified") {
-            const data = change.doc.data();
-            const productName = data.name;
-            
-            // Verificar si algo pasó a estado crítico en Candy 1
-            if (data.pos1Status === 'out') {
-               new Notification(`🚨 FALTA en Candy 1`, { body: `${productName} se agotó.` });
-            } else if (data.pos1Status === 'low') {
-               new Notification(`⚠️ Poco Stock en Candy 1`, { body: `${productName} se está acabando.` });
-            }
-
-            // Verificar si algo pasó a estado crítico en Candy 2
-            if (data.pos2Status === 'out') {
-               new Notification(`🚨 FALTA en Candy 2`, { body: `${productName} se agotó.` });
-            } else if (data.pos2Status === 'low') {
-               new Notification(`⚠️ Poco Stock en Candy 2`, { body: `${productName} se está acabando.` });
-            }
-          }
-        });
-      }
-      // --------------------------------
-
       // Ordenar: Primero los que faltan (out), luego poco (low), luego ok, luego por nombre
       items.sort((a, b) => {
         const score = (status) => (status === 'out' ? 0 : status === 'low' ? 1 : 2);
@@ -189,7 +158,7 @@ export default function App() {
     });
 
     return () => unsubscribeData();
-  }, [user, loading]); // Dependencias actualizadas
+  }, [user]);
 
   // --- Actions ---
 
