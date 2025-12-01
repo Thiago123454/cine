@@ -35,7 +35,11 @@ import {
   KeyRound,
   Bell,
   BellRing,
-  X
+  X,
+  Smartphone,
+  Share,
+  PlusSquare,
+  Wifi
 } from 'lucide-react';
 
 const firebaseConfig = {
@@ -73,12 +77,11 @@ const getStatusColorRaw = (s) => {
 
 // --- Components ---
 
-// Componente de Notificación Individual (In-App)
 const NotificationToast = ({ notif, onClose }) => {
   useEffect(() => {
     const timer = setTimeout(() => {
       onClose(notif.id);
-    }, 8000); // Le damos un poco más de tiempo para leer
+    }, 8000); 
     return () => clearTimeout(timer);
   }, [notif.id, onClose]);
 
@@ -86,7 +89,7 @@ const NotificationToast = ({ notif, onClose }) => {
     <div className={`
       pointer-events-auto w-full max-w-sm overflow-hidden rounded-lg shadow-lg ring-1 ring-black/5 
       flex items-start p-4 mb-3 transition-all animate-in slide-in-from-right fade-in duration-300
-      ${getStatusColorRaw(notif.status)} text-whiteqh relative
+      ${getStatusColorRaw(notif.status)} text-white relative z-50
     `}>
       <div className={`flex-1 text-white`}>
         <h3 className="text-sm font-bold flex items-center gap-2">
@@ -106,7 +109,31 @@ const NotificationToast = ({ notif, onClose }) => {
   );
 };
 
-// Status Badge Component
+// Componente para enseñar a instalar en iOS
+const IosInstallPrompt = ({ onClose }) => {
+  return (
+    <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] z-50 animate-in slide-in-from-bottom duration-500">
+      <div className="max-w-md mx-auto">
+        <div className="flex justify-between items-start mb-2">
+          <h3 className="font-bold text-gray-800 text-sm">📲 Instalar App en iPhone</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
+        </div>
+        <p className="text-xs text-gray-600 mb-3">
+          Para recibir notificaciones de stock, necesitas instalar esta web como App:
+        </p>
+        <div className="flex flex-col gap-2 text-xs font-medium text-gray-700">
+          <div className="flex items-center gap-2">
+            1. Toca el botón compartir <Share size={14} className="text-blue-500" /> abajo.
+          </div>
+          <div className="flex items-center gap-2">
+            2. Busca y selecciona <span className="bg-gray-100 px-1 py-0.5 rounded border border-gray-300 flex items-center gap-1"> <PlusSquare size={12} /> Agregar a Inicio</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const StatusBadge = ({ status, onClick, readonly = false }) => {
   const getStatusStyle = (s) => {
     switch (s) {
@@ -151,25 +178,81 @@ export default function App() {
   
   // Notification State
   const [notifications, setNotifications] = useState([]);
-  const [permission, setPermission] = useState(Notification.permission);
+  const [permission, setPermission] = useState('default');
+  const [swRegistration, setSwRegistration] = useState(null); 
+  
+  // iOS Detection State
+  const [isIos, setIsIos] = useState(false);
+  const [isInStandalone, setIsInStandalone] = useState(false);
+  const [showIosPrompt, setShowIosPrompt] = useState(false);
+
   const prevProductsRef = useRef({});
   const isFirstLoad = useRef(true);
-  
-  // NUEVO: Referencia para guardar los temporizadores de las notificaciones
   const pendingNotifications = useRef({}); 
 
-  // Login State
   const [showLogin, setShowLogin] = useState(false);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState('');
 
-  // New Product State
   const [newProdName, setNewProdName] = useState('');
   const [newProdCategory, setNewProdCategory] = useState('Snacks');
 
-  // --- Auth & Data Loading ---
+  // --- SERVICE WORKER & DEVICE CHECK ---
   useEffect(() => {
+    // Detectar iOS
+    const userAgent = window.navigator.userAgent.toLowerCase();
+    const ios = /iphone|ipad|ipod/.test(userAgent);
+    setIsIos(ios);
+
+    // Detectar si ya está instalada (Standalone mode)
+    const standalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+    setIsInStandalone(standalone);
+
+    // Si es iOS y NO está instalada, mostrar el prompt después de un ratito
+    if (ios && !standalone) {
+      setTimeout(() => setShowIosPrompt(true), 2000);
+    }
+
+    if ('Notification' in window) {
+      setPermission(Notification.permission);
+    }
+
+    // Registrar Service Worker
+    if ('serviceWorker' in navigator) {
+      const swCode = `
+        self.addEventListener('install', (event) => self.skipWaiting());
+        self.addEventListener('activate', (event) => event.waitUntil(self.clients.claim()));
+        self.addEventListener('notificationclick', (event) => {
+          event.notification.close();
+          event.waitUntil(
+            self.clients.matchAll({ type: 'window' }).then((clientList) => {
+              if (clientList.length > 0) {
+                let client = clientList[0];
+                for (let i = 0; i < clientList.length; i++) {
+                  if (clientList[i].focused) {
+                    client = clientList[i];
+                  }
+                }
+                return client.focus();
+              }
+              return self.clients.openWindow('/');
+            })
+          );
+        });
+      `;
+      
+      const blob = new Blob([swCode], {type: 'application/javascript'});
+      const blobUrl = URL.createObjectURL(blob);
+
+      navigator.serviceWorker.register(blobUrl)
+        .then(registration => {
+          console.log('SW Registered');
+          setSwRegistration(registration);
+        })
+        .catch(err => console.error('SW Error:', err));
+    }
+
     const initAuth = async () => {
       if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
         await signInWithCustomToken(auth, __initial_auth_token);
@@ -197,7 +280,6 @@ export default function App() {
       }));
       
       setProducts((currentProducts) => {
-        // Ordenamiento
         items.sort((a, b) => {
           const score = (status) => (status === 'out' ? 0 : status === 'low' ? 1 : 2);
           const scoreA = Math.min(score(a.pos1Status || 'ok'), score(a.pos2Status || 'ok'));
@@ -218,7 +300,7 @@ export default function App() {
     return () => unsubscribeData();
   }, [user]);
 
-  // --- Logic for Detection of Changes (Delayed Notifications) ---
+  // --- Logic for Detection of Changes (Debounced) ---
   useEffect(() => {
     if (products.length === 0) return;
 
@@ -237,39 +319,27 @@ export default function App() {
         return;
       }
 
-      // Función auxiliar para programar notificación
       const scheduleNotification = (posName, newStatus, posField) => {
-        const key = `${newP.id}_${posField}`; // ID único para este producto+puesto
+        const key = `${newP.id}_${posField}`; 
 
-        // 1. Si ya había una alerta pendiente para este producto, la cancelamos (RESETEAMOS EL RELOJ)
         if (pendingNotifications.current[key]) {
           clearTimeout(pendingNotifications.current[key]);
         }
 
-        // 2. Programamos una nueva alerta para dentro de 60 segundos (60000ms)
         pendingNotifications.current[key] = setTimeout(() => {
-          // Esta función se ejecuta solo si nadie canceló el timer en 60 segundos.
-          
-          // IMPORTANTE: Solo avisamos si el estado FINAL no es 'ok'
           if (newStatus !== 'ok') {
-            const title = `${posName}: ${newP.name}`;
-            const message = `Se mantiene en estado: ${getStatusLabel(newStatus)}`;
+            const title = `🚨 ALERTA: ${posName}`;
+            const message = `${newP.name}: ${getStatusLabel(newStatus)}`;
             addNotification(title, message, newStatus, true);
-          } else {
-            console.log(`Alerta cancelada para ${newP.name} porque volvió a OK`);
           }
-          
-          // Limpiamos la referencia
           delete pendingNotifications.current[key];
-        }, 60000); // <--- TIEMPO DE ESPERA: 1 MINUTO
+        }, 60000); 
       };
 
-      // Check POS 1 Cambios
       if (newP.pos1Status !== oldP.pos1Status) {
         scheduleNotification('Candy 1', newP.pos1Status, 'pos1Status');
       }
 
-      // Check POS 2 Cambios
       if (newP.pos2Status !== oldP.pos2Status) {
         scheduleNotification('Candy 2', newP.pos2Status, 'pos2Status');
       }
@@ -282,17 +352,49 @@ export default function App() {
   // --- Actions ---
 
   const requestNotificationPermission = async () => {
+    if (!('Notification' in window)) {
+      alert("Tu navegador no soporta notificaciones.");
+      return;
+    }
+
     try {
       const result = await Notification.requestPermission();
       setPermission(result);
       if (result === 'granted') {
-        new Notification("¡Notificaciones activadas!", {
-          body: "Te avisaremos cuando falte stock en Multiplex.",
-          icon: "/vite.svg"
-        });
+        sendSystemNotification("✅ Notificaciones Activas", "¡Listo! Ahora te avisaré del stock.", "ok");
       }
     } catch (error) {
       console.error("Error pidiendo permisos:", error);
+    }
+  };
+
+  const sendSystemNotification = (title, body, status) => {
+    const options = {
+      body: body,
+      icon: "/vite.svg", 
+      badge: "/vite.svg", 
+      vibrate: [200, 100, 200, 100, 400], 
+      tag: 'stock-alert',
+      renotify: true,
+      requireInteraction: true,
+      data: { url: window.location.href }
+    };
+
+    if (swRegistration && 'showNotification' in swRegistration) {
+      swRegistration.showNotification(title, options)
+        .catch(err => {
+          fallbackNotification(title, options);
+        });
+    } else {
+      fallbackNotification(title, options);
+    }
+  };
+
+  const fallbackNotification = (title, options) => {
+    try {
+      new Notification(title, options);
+    } catch (e) {
+      console.error("No se pudo enviar notificación nativa", e);
     }
   };
 
@@ -300,17 +402,8 @@ export default function App() {
     const id = Date.now() + Math.random();
     setNotifications(prev => [...prev, { id, title, message, status }]);
     
-    if (important && Notification.permission === 'granted') {
-       try {
-         new Notification(title, {
-           body: message,
-           icon: "/vite.svg",
-           vibrate: [200, 100, 200],
-           tag: 'stock-alert'
-         });
-       } catch (e) {
-         console.log("No se pudo enviar notificación nativa");
-       }
+    if (important && permission === 'granted') {
+       sendSystemNotification(title, message, status);
     }
   };
 
@@ -409,7 +502,7 @@ export default function App() {
   if (!role) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-pink-600 via-rose-600 to-red-700 flex flex-col items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white rounded-lg shadow-2xl overflow-hidden">
+        <div className="max-w-md w-full bg-white rounded-lg shadow-2xl overflow-hidden relative">
           <div className="bg-red-600 p-6 flex flex-col items-center justify-center text-white shadow-inner">
             <Popcorn size={48} className="mb-2 drop-shadow-sm" />
             <h1 className="text-2xl font-black uppercase tracking-wider text-center drop-shadow-md">Multiplex Canning</h1>
@@ -493,6 +586,10 @@ export default function App() {
             )}
           </div>
         </div>
+        
+        {/* iOS Install Prompt (Solo visible en pantalla de login si es iOS y no standalone) */}
+        {showIosPrompt && <IosInstallPrompt onClose={() => setShowIosPrompt(false)} />}
+        
         <p className="mt-8 text-white/60 text-xs">Multiplex &copy; {new Date().getFullYear()}</p>
       </div>
     );
@@ -528,15 +625,23 @@ export default function App() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-             {permission !== 'granted' && (
+             {/* Botón de Notificaciones */}
+             {permission !== 'granted' && !isIos && (
                <button 
                  onClick={requestNotificationPermission}
                  className="bg-yellow-400 hover:bg-yellow-500 text-yellow-900 px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1 shadow-md animate-pulse"
-                 title="Activar notificaciones para saber si falta stock cuando no miras la app"
                >
-                 <BellRing size={14} /> <span className="hidden sm:inline">Activar Avisos</span>
+                 <BellRing size={14} /> <span className="hidden sm:inline">Activar</span>
                </button>
              )}
+             
+             {/* Indicador para iPhone (si ya está en standalone, no mostramos nada, si no, mostramos icono informativo) */}
+             {isIos && !isInStandalone && (
+               <button onClick={() => setShowIosPrompt(true)} className="text-white/80 hover:text-white px-2">
+                 <Smartphone size={18} />
+               </button>
+             )}
+
              <button 
                onClick={() => setRole(null)}
                className="text-white/80 hover:text-white hover:bg-white/10 p-2 rounded-full transition-colors"
@@ -727,6 +832,9 @@ export default function App() {
           </div>
         </div>
       </main>
+      
+      {/* iOS Prompt también en dashboard si no está instalada */}
+      {showIosPrompt && role && <IosInstallPrompt onClose={() => setShowIosPrompt(false)} />}
     </div>
   );
 }
