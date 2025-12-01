@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
 import { 
   getFirestore, 
@@ -32,8 +32,10 @@ import {
   ClipboardList,
   ArrowRight,
   UserCircle2,
-  Lock,
-  KeyRound
+  KeyRound,
+  Bell,
+  BellRing,
+  X
 } from 'lucide-react';
 
 const firebaseConfig = {
@@ -47,9 +49,62 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-const appId = "multiplex-canning"; // Le ponemos un nombre fijo
+const appId = "multiplex-canning";
+
+// --- Helpers ---
+
+const getStatusLabel = (s) => {
+  switch (s) {
+    case 'ok': return 'Stock OK';
+    case 'low': return 'Queda Poco';
+    case 'out': return 'FALTA';
+    default: return '---';
+  }
+};
+
+const getStatusColorRaw = (s) => {
+  switch (s) {
+    case 'ok': return 'bg-emerald-500';
+    case 'low': return 'bg-amber-500';
+    case 'out': return 'bg-red-600';
+    default: return 'bg-slate-500';
+  }
+};
 
 // --- Components ---
+
+// Componente de Notificación Individual (In-App)
+const NotificationToast = ({ notif, onClose }) => {
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      onClose(notif.id);
+    }, 8000); // Le damos un poco más de tiempo para leer
+    return () => clearTimeout(timer);
+  }, [notif.id, onClose]);
+
+  return (
+    <div className={`
+      pointer-events-auto w-full max-w-sm overflow-hidden rounded-lg shadow-lg ring-1 ring-black/5 
+      flex items-start p-4 mb-3 transition-all animate-in slide-in-from-right fade-in duration-300
+      ${getStatusColorRaw(notif.status)} text-whiteqh relative
+    `}>
+      <div className={`flex-1 text-white`}>
+        <h3 className="text-sm font-bold flex items-center gap-2">
+           <Bell size={16} className="animate-bounce-short" />
+           {notif.title}
+        </h3>
+        <p className="mt-1 text-sm opacity-90">{notif.message}</p>
+        <p className="text-[10px] opacity-70 mt-1">Confirmado hace instantes</p>
+      </div>
+      <button 
+        onClick={() => onClose(notif.id)}
+        className="ml-4 inline-flex shrink-0 text-white/70 hover:text-white focus:outline-none"
+      >
+        <X size={18} />
+      </button>
+    </div>
+  );
+};
 
 // Status Badge Component
 const StatusBadge = ({ status, onClick, readonly = false }) => {
@@ -59,15 +114,6 @@ const StatusBadge = ({ status, onClick, readonly = false }) => {
       case 'low': return 'bg-amber-100 text-amber-700 border-amber-200 animate-pulse-slow hover:bg-amber-200';
       case 'out': return 'bg-red-100 text-red-700 border-red-200 font-bold hover:bg-red-200';
       default: return 'bg-slate-100 text-slate-500 border-slate-200';
-    }
-  };
-
-  const getLabel = (s) => {
-    switch (s) {
-      case 'ok': return 'Stock OK';
-      case 'low': return 'Queda Poco';
-      case 'out': return 'FALTA';
-      default: return '---';
     }
   };
 
@@ -91,7 +137,7 @@ const StatusBadge = ({ status, onClick, readonly = false }) => {
       `}
     >
       {getIcon(status)}
-      <span className="text-sm sm:text-base font-bold whitespace-nowrap">{getLabel(status)}</span>
+      <span className="text-sm sm:text-base font-bold whitespace-nowrap">{getStatusLabel(status)}</span>
     </button>
   );
 };
@@ -99,10 +145,19 @@ const StatusBadge = ({ status, onClick, readonly = false }) => {
 // Main App Component
 export default function App() {
   const [user, setUser] = useState(null);
-  const [role, setRole] = useState(null); // 'pos1', 'pos2', 'manager'
+  const [role, setRole] = useState(null); 
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   
+  // Notification State
+  const [notifications, setNotifications] = useState([]);
+  const [permission, setPermission] = useState(Notification.permission);
+  const prevProductsRef = useRef({});
+  const isFirstLoad = useRef(true);
+  
+  // NUEVO: Referencia para guardar los temporizadores de las notificaciones
+  const pendingNotifications = useRef({}); 
+
   // Login State
   const [showLogin, setShowLogin] = useState(false);
   const [username, setUsername] = useState('');
@@ -140,17 +195,20 @@ export default function App() {
         id: doc.id,
         ...doc.data()
       }));
-      // Ordenar: Primero los que faltan (out), luego poco (low), luego ok, luego por nombre
-      items.sort((a, b) => {
-        const score = (status) => (status === 'out' ? 0 : status === 'low' ? 1 : 2);
-        const scoreA = Math.min(score(a.pos1Status || 'ok'), score(a.pos2Status || 'ok'));
-        const scoreB = Math.min(score(b.pos1Status || 'ok'), score(b.pos2Status || 'ok'));
-        
-        if (scoreA !== scoreB) return scoreA - scoreB;
-        return a.name.localeCompare(b.name);
-      });
       
-      setProducts(items);
+      setProducts((currentProducts) => {
+        // Ordenamiento
+        items.sort((a, b) => {
+          const score = (status) => (status === 'out' ? 0 : status === 'low' ? 1 : 2);
+          const scoreA = Math.min(score(a.pos1Status || 'ok'), score(a.pos2Status || 'ok'));
+          const scoreB = Math.min(score(b.pos1Status || 'ok'), score(b.pos2Status || 'ok'));
+          
+          if (scoreA !== scoreB) return scoreA - scoreB;
+          return a.name.localeCompare(b.name);
+        });
+        return items;
+      });
+
       setLoading(false);
     }, (error) => {
       console.error("Error fetching data:", error);
@@ -160,14 +218,111 @@ export default function App() {
     return () => unsubscribeData();
   }, [user]);
 
+  // --- Logic for Detection of Changes (Delayed Notifications) ---
+  useEffect(() => {
+    if (products.length === 0) return;
+
+    if (isFirstLoad.current) {
+      const cache = {};
+      products.forEach(p => { cache[p.id] = { ...p }; });
+      prevProductsRef.current = cache;
+      isFirstLoad.current = false;
+      return;
+    }
+
+    products.forEach(newP => {
+      const oldP = prevProductsRef.current[newP.id];
+      if (!oldP) {
+        prevProductsRef.current[newP.id] = { ...newP };
+        return;
+      }
+
+      // Función auxiliar para programar notificación
+      const scheduleNotification = (posName, newStatus, posField) => {
+        const key = `${newP.id}_${posField}`; // ID único para este producto+puesto
+
+        // 1. Si ya había una alerta pendiente para este producto, la cancelamos (RESETEAMOS EL RELOJ)
+        if (pendingNotifications.current[key]) {
+          clearTimeout(pendingNotifications.current[key]);
+        }
+
+        // 2. Programamos una nueva alerta para dentro de 60 segundos (60000ms)
+        pendingNotifications.current[key] = setTimeout(() => {
+          // Esta función se ejecuta solo si nadie canceló el timer en 60 segundos.
+          
+          // IMPORTANTE: Solo avisamos si el estado FINAL no es 'ok'
+          if (newStatus !== 'ok') {
+            const title = `${posName}: ${newP.name}`;
+            const message = `Se mantiene en estado: ${getStatusLabel(newStatus)}`;
+            addNotification(title, message, newStatus, true);
+          } else {
+            console.log(`Alerta cancelada para ${newP.name} porque volvió a OK`);
+          }
+          
+          // Limpiamos la referencia
+          delete pendingNotifications.current[key];
+        }, 60000); // <--- TIEMPO DE ESPERA: 1 MINUTO
+      };
+
+      // Check POS 1 Cambios
+      if (newP.pos1Status !== oldP.pos1Status) {
+        scheduleNotification('Candy 1', newP.pos1Status, 'pos1Status');
+      }
+
+      // Check POS 2 Cambios
+      if (newP.pos2Status !== oldP.pos2Status) {
+        scheduleNotification('Candy 2', newP.pos2Status, 'pos2Status');
+      }
+
+      prevProductsRef.current[newP.id] = { ...newP };
+    });
+
+  }, [products]);
+
   // --- Actions ---
+
+  const requestNotificationPermission = async () => {
+    try {
+      const result = await Notification.requestPermission();
+      setPermission(result);
+      if (result === 'granted') {
+        new Notification("¡Notificaciones activadas!", {
+          body: "Te avisaremos cuando falte stock en Multiplex.",
+          icon: "/vite.svg"
+        });
+      }
+    } catch (error) {
+      console.error("Error pidiendo permisos:", error);
+    }
+  };
+
+  const addNotification = (title, message, status, important) => {
+    const id = Date.now() + Math.random();
+    setNotifications(prev => [...prev, { id, title, message, status }]);
+    
+    if (important && Notification.permission === 'granted') {
+       try {
+         new Notification(title, {
+           body: message,
+           icon: "/vite.svg",
+           vibrate: [200, 100, 200],
+           tag: 'stock-alert'
+         });
+       } catch (e) {
+         console.log("No se pudo enviar notificación nativa");
+       }
+    }
+  };
+
+  const removeNotification = (id) => {
+    setNotifications(prev => prev.filter(n => n.id !== id));
+  };
 
   const handleLogin = (e) => {
     e.preventDefault();
     const u = username.toLowerCase().trim();
     const p = password.trim();
 
-    // Validar credenciales
     if ((u === 'thiago' && p === 'river') || (u === 'fiorella' && p === 'river')) {
       setRole('manager');
       setLoginError('');
@@ -183,9 +338,9 @@ export default function App() {
     if (!user) return;
     
     let nextStatus = 'ok';
-    if (currentStatus === 'ok') nextStatus = 'low'; // De OK a Poco
-    else if (currentStatus === 'low') nextStatus = 'out'; // De Poco a Falta
-    else if (currentStatus === 'out') nextStatus = 'ok'; // De Falta a OK
+    if (currentStatus === 'ok') nextStatus = 'low'; 
+    else if (currentStatus === 'low') nextStatus = 'out'; 
+    else if (currentStatus === 'out') nextStatus = 'ok'; 
 
     const ref = doc(db, 'artifacts', appId, 'public', 'data', 'cinema_products', productId);
     await updateDoc(ref, {
@@ -226,13 +381,16 @@ export default function App() {
     }
   };
 
-  // Filter products specifically for restocking
   const getRestockItems = (posField) => {
     return products.filter(p => {
       const status = p[posField] || 'ok';
       return status === 'low' || status === 'out';
     });
   };
+
+  const pos1Needs = getRestockItems('pos1Status');
+  const pos2Needs = getRestockItems('pos2Status');
+  const totalAlerts = pos1Needs.length + pos2Needs.length;
 
   // --- Views ---
 
@@ -247,13 +405,11 @@ export default function App() {
     );
   }
 
-  // Login / Role Selection Screen (Styled like the image)
+  // Login / Role Selection Screen
   if (!role) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-pink-600 via-rose-600 to-red-700 flex flex-col items-center justify-center p-4">
-        {/* Simulating the white login box from the image */}
         <div className="max-w-md w-full bg-white rounded-lg shadow-2xl overflow-hidden">
-          {/* Red Header like in the image */}
           <div className="bg-red-600 p-6 flex flex-col items-center justify-center text-white shadow-inner">
             <Popcorn size={48} className="mb-2 drop-shadow-sm" />
             <h1 className="text-2xl font-black uppercase tracking-wider text-center drop-shadow-md">Multiplex Canning</h1>
@@ -342,13 +498,17 @@ export default function App() {
     );
   }
 
-  const pos1Needs = getRestockItems('pos1Status');
-  const pos2Needs = getRestockItems('pos2Status');
-  const totalAlerts = pos1Needs.length + pos2Needs.length;
-
   // Main Dashboard
   return (
     <div className="min-h-screen bg-gradient-to-br from-pink-600 via-rose-600 to-red-700 pb-24 font-sans text-slate-800">
+      
+      {/* --- NOTIFICATION CONTAINER --- */}
+      <div className="fixed top-4 right-4 z-50 w-full max-w-sm flex flex-col items-end pointer-events-none gap-2 px-4 sm:px-0">
+        {notifications.map(notif => (
+          <NotificationToast key={notif.id} notif={notif} onClose={removeNotification} />
+        ))}
+      </div>
+
       {/* Header */}
       <header className="bg-red-700 text-white shadow-lg sticky top-0 z-20 border-b border-red-800">
         <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
@@ -367,12 +527,23 @@ export default function App() {
               )}
             </div>
           </div>
-          <button 
-            onClick={() => setRole(null)}
-            className="text-white/80 hover:text-white hover:bg-white/10 p-2 rounded-full transition-colors"
-          >
-            <LogOut size={18} />
-          </button>
+          <div className="flex items-center gap-2">
+             {permission !== 'granted' && (
+               <button 
+                 onClick={requestNotificationPermission}
+                 className="bg-yellow-400 hover:bg-yellow-500 text-yellow-900 px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1 shadow-md animate-pulse"
+                 title="Activar notificaciones para saber si falta stock cuando no miras la app"
+               >
+                 <BellRing size={14} /> <span className="hidden sm:inline">Activar Avisos</span>
+               </button>
+             )}
+             <button 
+               onClick={() => setRole(null)}
+               className="text-white/80 hover:text-white hover:bg-white/10 p-2 rounded-full transition-colors"
+             >
+               <LogOut size={18} />
+             </button>
+          </div>
         </div>
       </header>
 
