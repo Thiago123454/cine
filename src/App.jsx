@@ -39,7 +39,7 @@ import {
   Smartphone,
   Share,
   PlusSquare,
-  Wifi
+  Package // Icono para Descartables
 } from 'lucide-react';
 
 const firebaseConfig = {
@@ -50,6 +50,7 @@ const firebaseConfig = {
   messagingSenderId: "595772193554",
   appId: "1:595772193554:web:6de65d7b948930957851cb"
 };
+
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
@@ -281,11 +282,14 @@ export default function App() {
       
       setProducts((currentProducts) => {
         items.sort((a, b) => {
-          const score = (status) => (status === 'out' ? 0 : status === 'low' ? 1 : 2);
-          const scoreA = Math.min(score(a.pos1Status || 'ok'), score(a.pos2Status || 'ok'));
-          const scoreB = Math.min(score(b.pos1Status || 'ok'), score(b.pos2Status || 'ok'));
+          // 1. Ordenar por Categoría
+          const catA = a.category || 'Varios';
+          const catB = b.category || 'Varios';
+          const catComparison = catA.localeCompare(catB);
           
-          if (scoreA !== scoreB) return scoreA - scoreB;
+          if (catComparison !== 0) return catComparison;
+
+          // 2. Ordenar Alfabéticamente por Nombre
           return a.name.localeCompare(b.name);
         });
         return items;
@@ -470,6 +474,7 @@ export default function App() {
       case 'Bebidas': return <Beer className="text-blue-500" />;
       case 'Dulces': return <Candy className="text-pink-500" />;
       case 'Helados': return <IceCream className="text-purple-500" />;
+      case 'Descartables': return <Package className="text-gray-500" />;
       default: return <Popcorn className="text-gray-400" />;
     }
   };
@@ -594,6 +599,96 @@ export default function App() {
       </div>
     );
   }
+
+  // Helper para agrupar visualmente la lista ordenada
+  const renderProductList = () => {
+    if (products.length === 0) {
+      return (
+        <div className="text-center py-12 text-white/80 bg-white/10 rounded-xl backdrop-blur-sm border border-white/20">
+          <p className="font-medium">Lista vacía.</p>
+        </div>
+      );
+    }
+
+    const items = [];
+    let lastCategory = null;
+
+    products.forEach((product) => {
+      // Inserción de Encabezado de Categoría
+      if (product.category !== lastCategory) {
+        items.push(
+          <div key={`cat-${product.category}`} className="sticky top-14 z-10 bg-red-800/90 text-white px-4 py-1.5 rounded-lg shadow-sm backdrop-blur-sm mb-2 mt-4 first:mt-0 border border-red-700 flex items-center gap-2">
+             {getCategoryIcon(product.category)}
+             <span className="font-bold text-sm uppercase tracking-wider">{product.category || 'Varios'}</span>
+          </div>
+        );
+        lastCategory = product.category;
+      }
+
+      // Tarjeta de Producto
+      items.push(
+        <div 
+          key={product.id} 
+          className={`
+            bg-white rounded-xl overflow-hidden shadow-lg flex flex-col sm:flex-row mb-3
+            ${(role === 'manager' && (product.pos1Status !== 'ok' || product.pos2Status !== 'ok')) 
+              ? 'ring-2 ring-yellow-400' 
+              : ''}
+          `}
+        >
+          {/* Product Info */}
+          <div className="p-3 sm:p-4 flex items-center gap-3 flex-1 border-b sm:border-b-0 sm:border-r border-gray-100 bg-white">
+            <div className="p-2 bg-gray-50 rounded-lg shrink-0 border border-gray-100">
+              {getCategoryIcon(product.category)}
+            </div>
+            <div className="min-w-0">
+              <h3 className="font-bold text-base text-gray-800 truncate pr-2 leading-tight">{product.name}</h3>
+              <span className="text-[10px] uppercase font-bold tracking-wider text-gray-400">
+                {product.category}
+              </span>
+            </div>
+            {role === 'manager' && (
+              <button 
+                onClick={() => deleteProduct(product.id)}
+                className="ml-auto text-gray-300 hover:text-red-500 p-2 transition-colors"
+              >
+                <Trash2 size={16} />
+              </button>
+            )}
+          </div>
+
+          {/* Controls Area */}
+          <div className="flex divide-x divide-gray-100 h-auto sm:h-full">
+            {/* POS 1 Control */}
+            {(role === 'manager' || role === 'pos1') && (
+              <div className="flex-1 p-2 sm:p-3 flex flex-col items-center justify-center min-w-[120px] bg-gray-50/50">
+                <span className="text-[10px] uppercase text-gray-400 font-bold mb-1">Candy 1</span>
+                <StatusBadge 
+                  status={product.pos1Status || 'ok'} 
+                  onClick={() => cycleStatus(product.id, product.pos1Status || 'ok', 'pos1Status')}
+                  readonly={role === 'manager'}
+                />
+              </div>
+            )}
+
+            {/* POS 2 Control */}
+            {(role === 'manager' || role === 'pos2') && (
+              <div className="flex-1 p-2 sm:p-3 flex flex-col items-center justify-center min-w-[120px] bg-gray-50/50">
+                <span className="text-[10px] uppercase text-gray-400 font-bold mb-1">Candy 2</span>
+                <StatusBadge 
+                  status={product.pos2Status || 'ok'} 
+                  onClick={() => cycleStatus(product.id, product.pos2Status || 'ok', 'pos2Status')}
+                  readonly={role === 'manager'}
+                />
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    });
+
+    return items;
+  };
 
   // Main Dashboard
   return (
@@ -742,6 +837,7 @@ export default function App() {
                     <option value="Bebidas">Bebidas</option>
                     <option value="Dulces">Dulces</option>
                     <option value="Helados">Helados</option>
+                    <option value="Descartables">Descartables</option>
                   </select>
                   <button 
                     type="submit"
@@ -763,72 +859,8 @@ export default function App() {
              </h3>
           )}
           
-          <div className="space-y-3">
-            {products.length === 0 ? (
-              <div className="text-center py-12 text-white/80 bg-white/10 rounded-xl backdrop-blur-sm border border-white/20">
-                <p className="font-medium">Lista vacía.</p>
-              </div>
-            ) : (
-              products.map((product) => (
-                <div 
-                  key={product.id} 
-                  className={`
-                    bg-white rounded-xl overflow-hidden shadow-lg flex flex-col sm:flex-row
-                    ${(role === 'manager' && (product.pos1Status !== 'ok' || product.pos2Status !== 'ok')) 
-                      ? 'ring-2 ring-yellow-400' 
-                      : ''}
-                  `}
-                >
-                  {/* Product Info */}
-                  <div className="p-3 sm:p-4 flex items-center gap-3 flex-1 border-b sm:border-b-0 sm:border-r border-gray-100 bg-white">
-                    <div className="p-2 bg-gray-50 rounded-lg shrink-0 border border-gray-100">
-                      {getCategoryIcon(product.category)}
-                    </div>
-                    <div className="min-w-0">
-                      <h3 className="font-bold text-base text-gray-800 truncate pr-2 leading-tight">{product.name}</h3>
-                      <span className="text-[10px] uppercase font-bold tracking-wider text-gray-400">
-                        {product.category}
-                      </span>
-                    </div>
-                    {role === 'manager' && (
-                      <button 
-                        onClick={() => deleteProduct(product.id)}
-                        className="ml-auto text-gray-300 hover:text-red-500 p-2 transition-colors"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    )}
-                  </div>
-
-                  {/* Controls Area */}
-                  <div className="flex divide-x divide-gray-100 h-auto sm:h-full">
-                    {/* POS 1 Control */}
-                    {(role === 'manager' || role === 'pos1') && (
-                      <div className="flex-1 p-2 sm:p-3 flex flex-col items-center justify-center min-w-[120px] bg-gray-50/50">
-                        <span className="text-[10px] uppercase text-gray-400 font-bold mb-1">Candy 1</span>
-                        <StatusBadge 
-                          status={product.pos1Status || 'ok'} 
-                          onClick={() => cycleStatus(product.id, product.pos1Status || 'ok', 'pos1Status')}
-                          readonly={role === 'manager'}
-                        />
-                      </div>
-                    )}
-
-                    {/* POS 2 Control */}
-                    {(role === 'manager' || role === 'pos2') && (
-                      <div className="flex-1 p-2 sm:p-3 flex flex-col items-center justify-center min-w-[120px] bg-gray-50/50">
-                        <span className="text-[10px] uppercase text-gray-400 font-bold mb-1">Candy 2</span>
-                        <StatusBadge 
-                          status={product.pos2Status || 'ok'} 
-                          onClick={() => cycleStatus(product.id, product.pos2Status || 'ok', 'pos2Status')}
-                          readonly={role === 'manager'}
-                        />
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))
-            )}
+          <div className="space-y-0">
+             {renderProductList()}
           </div>
         </div>
       </main>
