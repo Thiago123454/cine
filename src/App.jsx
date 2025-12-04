@@ -666,7 +666,7 @@ export default function App() {
                 <StatusBadge 
                   status={product.pos1Status || 'ok'} 
                   onClick={() => cycleStatus(product.id, product.pos1Status || 'ok', 'pos1Status')}
-                  readonly={role === 'manager'}
+                  readonly={false}
                 />
               </div>
             )}
@@ -678,7 +678,7 @@ export default function App() {
                 <StatusBadge 
                   status={product.pos2Status || 'ok'} 
                   onClick={() => cycleStatus(product.id, product.pos2Status || 'ok', 'pos2Status')}
-                  readonly={role === 'manager'}
+                  readonly={false}
                 />
               </div>
             )}
