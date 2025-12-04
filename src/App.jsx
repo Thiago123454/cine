@@ -174,6 +174,7 @@ const StatusBadge = ({ status, onClick, readonly = false }) => {
 export default function App() {
   const [user, setUser] = useState(null);
   const [role, setRole] = useState(null); 
+  const [managerName, setManagerName] = useState(''); // NUEVO: Estado para el nombre del manager
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   
@@ -422,6 +423,9 @@ export default function App() {
 
     if ((u === 'thiago' && p === 'river') || (u === 'fiorella' && p === 'river')) {
       setRole('manager');
+      // NUEVO: Guardamos el nombre capitalizado (Primera letra mayúscula)
+      setManagerName(u.charAt(0).toUpperCase() + u.slice(1));
+      
       setLoginError('');
       setUsername('');
       setPassword('');
@@ -710,7 +714,8 @@ export default function App() {
             </div>
             <div>
               <h1 className="font-bold text-base leading-tight drop-shadow-sm">
-                {role === 'manager' ? 'Fiorella & Thiago' : role === 'pos1' ? 'Candy 1' : 'Candy 2'}
+                {/* CAMBIO: Muestra el saludo personalizado si es manager */}
+                {role === 'manager' ? `Hola ${managerName}, ¿Cómo andas hoy?` : role === 'pos1' ? 'Candy 1' : 'Candy 2'}
               </h1>
               {role === 'manager' && totalAlerts > 0 ? (
                 <p className="text-xs text-yellow-200 animate-pulse font-bold">{totalAlerts} alertas de stock</p>
