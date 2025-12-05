@@ -1,16 +1,34 @@
 import React from 'react';
-import { Popcorn, Beer, Candy, IceCream, Package, Trash2, GripVertical } from 'lucide-react';
+import { 
+  Popcorn, 
+  Beer, 
+  Candy, 
+  IceCream, 
+  Package, 
+  Trash2, 
+  GripVertical,
+  Milk,       // Para Botellas
+  Pizza,      // Para Nachos (forma triangular)
+  Droplets,   // Para Jarabes
+  Sandwich,   // Para Snacks
+  FrenchFries // Para Papas Fritas (Nuevo ícono)
+} from 'lucide-react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
-import StatusBadge from './StatusBadge';
+import StatusBadge from './StatusBadge.jsx';
 
 const getCategoryIcon = (cat) => {
   switch (cat) {
-    case 'Snacks': return <Popcorn className="text-amber-500" />;
+    case 'Pochoclos': return <Popcorn className="text-yellow-500" />;
     case 'Bebidas': return <Beer className="text-blue-500" />;
+    case 'Botellas': return <Milk className="text-sky-600" />;
     case 'Dulces': return <Candy className="text-pink-500" />;
     case 'Helados': return <IceCream className="text-purple-500" />;
+    case 'Papas': return <FrenchFries className="text-orange-500" />; // Ícono de papas fritas
+    case 'Nachos': return <Pizza className="text-yellow-600" />;
+    case 'Jarabes': return <Droplets className="text-indigo-500" />;
     case 'Descartables': return <Package className="text-gray-500" />;
-    default: return <Popcorn className="text-gray-400" />;
+    case 'Snacks': return <Sandwich className="text-amber-600" />; 
+    default: return <Package className="text-gray-400" />;
   }
 };
 
@@ -64,11 +82,11 @@ export default function ProductList({ products, role, onCycleStatus, onDelete, o
                       >
                         <div className="p-3 sm:p-4 flex items-center gap-3 flex-1 border-b sm:border-b-0 sm:border-r border-gray-100 bg-white">
                           
-                          {/* Drag Handle - Sólo para managers */}
                           {role === 'manager' && (
                             <div 
                               {...provided.dragHandleProps} 
                               className="touch-none p-2 -ml-2 text-gray-300 hover:text-pink-600 cursor-grab active:cursor-grabbing"
+                              title="Arrastrar para reordenar"
                             >
                               <GripVertical size={20} />
                             </div>
