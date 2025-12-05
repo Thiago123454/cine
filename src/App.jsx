@@ -29,7 +29,7 @@ export default function App() {
   }, []);
 
   const { user, role, setRole, managerName, loginManager, logout } = useAuth();
-  const { products, loading, addProduct, deleteProduct, cycleStatus } = useProducts(user);
+  const { products, loading, addProduct, deleteProduct, cycleStatus, reorderProducts } = useProducts(user);
   const { notifications, permission, removeNotification, requestPermission } = useNotifications(products);
 
   if (!user || loading) {
@@ -88,7 +88,8 @@ export default function App() {
             products={products} 
             role={role} 
             onCycleStatus={cycleStatus} 
-            onDelete={deleteProduct} 
+            onDelete={deleteProduct}
+            onReorder={reorderProducts}
           />
         </div>
       </main>
