@@ -3,7 +3,7 @@ import { ClipboardList, Store, Plus, CheckCircle2 } from 'lucide-react';
 
 export default function ManagerControls({ products, onAddProduct }) {
   const [name, setName] = useState('');
-  const [category, setCategory] = useState('Snacks');
+  const [category, setCategory] = useState('Pochoclos');
 
   const pos1Needs = products.filter(p => p.pos1Status !== 'ok');
   const pos2Needs = products.filter(p => p.pos2Status !== 'ok');
@@ -58,7 +58,16 @@ export default function ManagerControls({ products, onAddProduct }) {
          <form onSubmit={handleAdd} className="flex gap-2">
             <input type="text" placeholder="Nombre..." value={name} onChange={e => setName(e.target.value)} className="flex-1 bg-gray-100 border border-gray-200 rounded px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-pink-500" />
             <select value={category} onChange={e => setCategory(e.target.value)} className="bg-gray-100 border border-gray-200 rounded px-2 py-2 text-sm cursor-pointer">
-              <option>Snacks</option><option>Bebidas</option><option>Dulces</option><option>Helados</option><option>Descartables</option>
+              <option>Pochoclos</option>
+              <option>Papas</option>
+              <option>Nachos</option>
+              <option>Bebidas</option>
+              <option>Botellas</option>
+              <option>Jarabes</option>
+              <option>Snacks</option>
+              <option>Dulces</option>
+              <option>Helados</option>
+              <option>Descartables</option>
             </select>
             <button type="submit" disabled={!name.trim()} className="bg-pink-600 hover:bg-pink-700 text-white px-4 rounded shadow-sm"><Plus size={18} /></button>
          </form>

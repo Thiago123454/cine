@@ -1,12 +1,29 @@
 import React from 'react';
-import { Popcorn, Beer, Candy, IceCream, Package, Trash2, GripVertical } from 'lucide-react';
+import { 
+  Popcorn, 
+  Beer, 
+  Candy, 
+  IceCream, 
+  Package, 
+  Trash2, 
+  GripVertical,
+  GlassWater, // Para Botellas
+  Utensils,   // Para Papas
+  Triangle,   // Para Nachos
+  Droplet     // Para Jarabes
+} from 'lucide-react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import StatusBadge from './StatusBadge';
 
 const getCategoryIcon = (cat) => {
   switch (cat) {
     case 'Snacks': return <Popcorn className="text-amber-500" />;
+    case 'Pochoclos': return <Popcorn className="text-yellow-500" />; // Mismo ícono, tono distinto
+    case 'Papas': return <Utensils className="text-orange-500" />;
+    case 'Nachos': return <Triangle className="text-yellow-600 rotate-180" />; // Triángulo invertido parece nacho
     case 'Bebidas': return <Beer className="text-blue-500" />;
+    case 'Botellas': return <GlassWater className="text-cyan-500" />;
+    case 'Jarabes': return <Droplet className="text-indigo-500" />;
     case 'Dulces': return <Candy className="text-pink-500" />;
     case 'Helados': return <IceCream className="text-purple-500" />;
     case 'Descartables': return <Package className="text-gray-500" />;
