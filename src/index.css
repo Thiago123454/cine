@@ -1,1 +1,9 @@
 @import "tailwindcss";
+
+@layer theme {
+  :root {
+    --font-sans: "Inter", system-ui, sans-serif;
+  }
+}
+
+/* Custom CSS if needed */
