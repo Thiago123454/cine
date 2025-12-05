@@ -11,10 +11,33 @@ import {
   Pizza,      // Para Nachos (forma triangular)
   Droplets,   // Para Jarabes
   Sandwich,   // Para Snacks
-  FrenchFries // Para Papas Fritas (Nuevo ícono)
+  Cookie      // Alternativo genérico
 } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
-import StatusBadge from './StatusBadge.jsx';
+import StatusBadge from './StatusBadge';
+
+// Icono personalizado de Papa (Verdura)
+const PotatoIcon = (props) => (
+  <svg 
+    xmlns="http://www.w3.org/2000/svg" 
+    width="24" 
+    height="24" 
+    viewBox="0 0 24 24" 
+    fill="none" 
+    stroke="currentColor" 
+    strokeWidth="2" 
+    strokeLinecap="round" 
+    strokeLinejoin="round" 
+    {...props}
+  >
+    {/* Contorno irregular de una papa */}
+    <path d="M11 4c-5 0-9 3.5-9 8.5s4 9 10 8.5c5.5-.5 9-3 9-8S17 4 11 4z" />
+    {/* "Ojos" o detalles de la papa */}
+    <path d="M7 11h.01" strokeWidth="2.5" />
+    <path d="M13 14h.01" strokeWidth="2.5" />
+    <path d="M16 9h.01" strokeWidth="2.5" />
+  </svg>
+);
 
 const getCategoryIcon = (cat) => {
   switch (cat) {
@@ -23,7 +46,7 @@ const getCategoryIcon = (cat) => {
     case 'Botellas': return <Milk className="text-sky-600" />;
     case 'Dulces': return <Candy className="text-pink-500" />;
     case 'Helados': return <IceCream className="text-purple-500" />;
-    case 'Papas': return <FrenchFries className="text-orange-500" />; // Ícono de papas fritas
+    case 'Papas': return <PotatoIcon className="text-amber-700" />; // Color tierra/papa
     case 'Nachos': return <Pizza className="text-yellow-600" />;
     case 'Jarabes': return <Droplets className="text-indigo-500" />;
     case 'Descartables': return <Package className="text-gray-500" />;
@@ -56,6 +79,7 @@ export default function ProductList({ products, role, onCycleStatus, onDelete, o
         {(provided) => (
           <div {...provided.droppableProps} ref={provided.innerRef} className="space-y-0">
             {products.map((p, index) => {
+              // Lógica visual para agrupar visualmente si están ordenados
               const showHeader = p.category !== lastCategory;
               if (showHeader) lastCategory = p.category;
 
